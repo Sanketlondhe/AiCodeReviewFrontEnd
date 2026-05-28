@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>AI Code Review Assistant</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0e0f14;--bg2:#13151d;--bg3:#1a1d28;
+  --surface:#1e2130;--surface2:#252840;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --accent:#6c63ff;--accent2:#a78bfa;--glow:rgba(108,99,255,0.18);
+  --text:#e8e9f0;--muted:#7c7f96;
+  --green:#4ade80;--amber:#fbbf24;--red:#f87171;--blue:#60a5fa;
+  --mono:'DM Mono',monospace;--sans:'Syne',sans-serif;
+}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ── */
+.header{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--bg2);position:sticky;top:0;z-index:200}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;letter-spacing:-.3px}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
+.logo span{color:var(--accent2)}
+.header-right{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── MOBILE TABS ── */
+.tab-bar{display:none;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:61px;z-index:199}
+.tab-btn{flex:1;padding:13px 8px;font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.4px;text-transform:uppercase;background:none;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:6px;-webkit-tap-highlight-color:transparent}
+.tab-btn.active{color:var(--accent2);border-bottom-color:var(--accent)}
+.tab-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:none}
+
+/* ── LAYOUT ── */
+.main{display:grid;grid-template-columns:1fr 1fr;height:calc(100vh - 61px)}
+.panel{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border)}
+.panel:last-child{border-right:none}
+.panel-hdr{padding:13px 20px;border-bottom:1px solid var(--border);background:var(--bg2);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.panel-title{font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+.panel-badge{margin-left:auto;font-size:11px;font-family:var(--mono);padding:3px 9px;border-radius:4px;background:var(--surface2);color:var(--accent2);border:1px solid rgba(108,99,255,.3)}
+.panel-body{flex:1;overflow-y:auto;padding:20px;background:var(--bg)}
+.panel-body::-webkit-scrollbar{width:3px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+
+/* ── FORM ── */
+.form-group{margin-bottom:18px}
+label{display:block;font-size:12px;font-family:var(--mono);color:var(--muted);margin-bottom:7px;letter-spacing:.3px}
+label .req{color:var(--accent2);margin-left:2px}
+.opt{color:var(--muted);margin-left:4px;font-size:11px}
+select,textarea{width:100%;background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:8px;font-size:13px;font-family:var(--mono);transition:border-color .2s;outline:none}
+select{padding:11px 14px;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c7f96' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
+select option{background:var(--bg2)}
+select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
+.code-area{min-height:220px;padding:13px;resize:vertical;line-height:1.65}
+.req-area{min-height:80px;padding:11px 13px;resize:vertical;line-height:1.65}
+.char-hint{font-size:11px;font-family:var(--mono);color:var(--muted);text-align:right;margin-top:5px}
+
+.submit-btn{width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:9px;font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,transform .1s;-webkit-tap-highlight-color:transparent}
+.submit-btn:hover{background:#5a52e0}
+.submit-btn:active{transform:scale(.98)}
+.submit-btn:disabled{background:var(--surface2);color:var(--muted);cursor:not-allowed;transform:none}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── EMPTY STATE ── */
+.empty-state{min-height:300px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);font-family:var(--mono);font-size:13px;text-align:center;padding:32px}
+.empty-icon{width:54px;height:54px;border-radius:13px;background:var(--surface);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.empty-title{font-size:14px;color:var(--text);font-weight:500}
+
+/* ── ERROR BANNER ── */
+.error-banner{background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:9px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px;font-family:var(--mono);font-size:13px;color:#f87171;margin-bottom:14px}
+
+/* ── RESULTS ── */
+.results-wrap{display:flex;flex-direction:column;gap:12px}
+.section-card{background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden;animation:fadeUp .3s ease forwards;opacity:0}
+@keyframes fadeUp{to{opacity:1;transform:translateY(0)}from{opacity:0;transform:translateY(7px)}}
+.sec-head{padding:11px 15px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
+.sec-head:hover{background:rgba(255,255,255,.02)}
+.sec-icon{width:27px;height:27px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sec-title{font-size:11px;font-family:var(--mono);font-weight:500;letter-spacing:.4px;text-transform:uppercase;flex:1}
+.chevron{font-size:12px;color:var(--muted);transition:transform .2s}
+.chevron.open{transform:rotate(180deg)}
+.sec-body{padding:13px 15px;font-size:13px;line-height:1.8;color:#c5c8db;font-family:var(--mono);display:none}
+.sec-body.open{display:block}
+
+.score-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:4px}
+.score-item{background:var(--bg3);border-radius:8px;padding:10px 13px;border:1px solid var(--border)}
+.score-label{font-size:11px;color:var(--muted);font-family:var(--mono);margin-bottom:6px}
+.score-bar-wrap{display:flex;align-items:center;gap:8px}
+.score-bar{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden}
+.score-fill{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.34,1.56,.64,1)}
+.score-num{font-size:12px;font-weight:500;font-family:var(--mono);min-width:28px;text-align:right}
+
+.verdict-card{background:var(--bg3);border-radius:8px;padding:13px;border:1px solid var(--border);margin-top:4px}
+.verdict-status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:12px;font-family:var(--mono);font-weight:500;margin-bottom:9px}
+.verdict-text{font-size:13px;line-height:1.75;color:#c5c8db;font-family:var(--mono)}
+.issue-item{padding:8px 12px;background:var(--bg3);border-radius:6px;margin-bottom:7px;border-left:2px solid transparent;font-size:13px;font-family:var(--mono);line-height:1.7;color:#c5c8db}
+
+/* ── SKELETONS ── */
+.skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.loading-wrap{display:flex;flex-direction:column;gap:11px}
+
+/* ── FAB (mobile) ── */
+.fab{display:none;position:fixed;bottom:20px;left:16px;right:16px;z-index:300;box-shadow:0 6px 28px rgba(108,99,255,.4);border-radius:10px}
+.desktop-btn{display:flex}
+
+/* ── MOBILE ── */
+@media(max-width:720px){
+  .header{padding:12px 16px}
+  .logo{font-size:14px}
+  .logo-icon{width:28px;height:28px}
+  .tab-bar{display:flex}
+  .main{display:block;height:auto;min-height:calc(100vh - 107px)}
+  .panel{display:none;border-right:none;height:auto;overflow:visible}
+  .panel.active{display:flex;flex-direction:column}
+  .panel-hdr{display:none}
+  .panel-body{overflow-y:visible;padding:14px;flex:none;padding-bottom:90px}
+  .code-area{min-height:160px}
+  .req-area{min-height:65px}
+  .fab{display:flex}
+  .desktop-btn{display:none}
+  .empty-state{min-height:200px}
+}
+@media(max-width:380px){
+  .score-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="header">
+  <div class="logo">
+    <div class="logo-icon"><i class="fa-solid fa-code" style="color:#fff;font-size:14px"></i></div>
+    Code<span>Review</span>.ai
+  </div>
+  <div class="header-right">
+    <div class="dot"></div>
+    Spring AI · GPT-4o
+  </div>
+</div>
+
+<!-- ═══ MOBILE TABS ═══ -->
+<div class="tab-bar" id="tabBar">
+  <button class="tab-btn active" id="tabInput" onclick="switchTab('input')">
+    <i class="fa-solid fa-file-code"></i> Submit
+  </button>
+  <button class="tab-btn" id="tabResult" onclick="switchTab('result')">
+    <i class="fa-solid fa-clipboard-check"></i> Results
+    <span class="tab-dot" id="tabDot"></span>
+  </button>
+</div>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main">
+
+  <!-- INPUT PANEL -->
+  <div class="panel active" id="panelInput">
+    <div class="panel-hdr">
+      <i class="fa-solid fa-file-code" style="color:#6c63ff;font-size:15px"></i>
+      <span class="panel-title">Submit Code</span>
+      <span class="panel-badge">v1.0</span>
+    </div>
+    <div class="panel-body">
+
+      <div class="form-group">
+        <label for="lang">Programming Language <span class="req">*</span></label>
+        <select id="lang">
+          <option value="">Select language...</option>
+          <option value="Java">Java</option>
+          <option value="Python">Python</option>
+          <option value="JavaScript">JavaScript / TypeScript</option>
+          <option value="Go">Go</option>
+          <option value="C#">C#</option>
+          <option value="C++">C++</option>
+          <option value="Rust">Rust</option>
+          <option value="Kotlin">Kotlin</option>
+          <option value="PHP">PHP</option>
+          <option value="Ruby">Ruby</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="reqs">Business Requirements <span class="opt">(optional)</span></label>
+        <textarea id="reqs" class="req-area" placeholder="e.g. Validate password: min 8 chars, one uppercase, one number, one special char..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="code">Your Code <span class="req">*</span></label>
+        <textarea id="code" class="code-area" placeholder="// Paste your code here..."></textarea>
+        <div class="char-hint" id="charCount">0 chars</div>
+      </div>
+
+      <!-- Desktop submit -->
+      <button class="submit-btn desktop-btn" id="btnDesktop" onclick="startReview()">
+        <div class="spinner" id="spnD"></div>
+        <span id="txtD"><i class="fa-solid fa-bolt"></i> &nbsp;Run Code Review</span>
+      </button>
+
+    </div>
+  </div>
+
+  <!-- RESULTS PANEL -->
+  <div class="panel" id="panelResult">
+    <div class="panel-hdr">
+      <i class="fa-solid fa-clipboard-check" style="color:#a78bfa;font-size:15px"></i>
+      <span class="panel-title">Review Results</span>
+      <span class="panel-badge" id="liveBadge" style="display:none">Live</span>
+    </div>
+    <div class="panel-body" id="resultPanel">
+      <div class="empty-state">
+        <div class="empty-icon"><i class="fa-solid fa-robot" style="color:#6c63ff;font-size:22px"></i></div>
+        <div class="empty-title">No review yet</div>
+        <div>Submit your code to get an<br>expert-level AI analysis</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MOBILE FAB -->
+<button class="submit-btn fab" id="btnMobile" onclick="startReview()">
+  <div class="spinner" id="spnM"></div>
+  <span id="txtM"><i class="fa-solid fa-bolt"></i> &nbsp;Run Code Review</span>
+</button>
+
+<script>
+  // ════════════════════════════════════════
+  //  CONFIG — change this after Railway deploy
+  // ════════════════════════════════════════
+  const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8080'
+    : 'https://YOUR-RAILWAY-APP.up.railway.app';  // ← Replace after deploy
+
+  const SECTIONS = [
+    {key:'business', icon:'fa-building-columns', label:'Business Logic',   color:'#6c63ff', bg:'rgba(108,99,255,.12)'},
+    {key:'bugs',     icon:'fa-bug',              label:'Bugs & Errors',     color:'#f87171', bg:'rgba(248,113,113,.1)'},
+    {key:'clean',    icon:'fa-brush',            label:'Clean Code',        color:'#60a5fa', bg:'rgba(96,165,250,.1)'},
+    {key:'perf',     icon:'fa-bolt',             label:'Performance',       color:'#fbbf24', bg:'rgba(251,191,36,.1)'},
+    {key:'security', icon:'fa-shield-halved',    label:'Security',          color:'#4ade80', bg:'rgba(74,222,128,.1)'},
+    {key:'concur',   icon:'fa-shuffle',          label:'Concurrency',       color:'#a78bfa', bg:'rgba(167,139,250,.1)'},
+    {key:'prod',     icon:'fa-server',           label:'Production Ready',  color:'#fb923c', bg:'rgba(251,146,60,.1)'},
+    {key:'arch',     icon:'fa-layer-group',      label:'Architecture',      color:'#34d399', bg:'rgba(52,211,153,.1)'},
+    {key:'testing',  icon:'fa-flask',            label:'Testing',           color:'#818cf8', bg:'rgba(129,140,248,.1)'},
+    {key:'scores',   icon:'fa-chart-bar',        label:'Final Score',       color:'#f472b6', bg:'rgba(244,114,182,.1)'},
+    {key:'verdict',  icon:'fa-gavel',            label:'Final Verdict',     color:'#facc15', bg:'rgba(250,204,21,.1)'},
+  ];
+
+  document.getElementById('code').addEventListener('input', function(){
+    document.getElementById('charCount').textContent = this.value.length + ' chars';
+  });
+
+  function switchTab(tab) {
+    const toInput = tab === 'input';
+    document.getElementById('panelInput').classList.toggle('active', toInput);
+    document.getElementById('panelResult').classList.toggle('active', !toInput);
+    document.getElementById('tabInput').classList.toggle('active', toInput);
+    document.getElementById('tabResult').classList.toggle('active', !toInput);
+    if (!toInput) document.getElementById('tabDot').style.display = 'none';
+    window.scrollTo(0,0);
+  }
+
+  function setLoading(on) {
+    ['Desktop','Mobile'].forEach(s => {
+      const btn = document.getElementById('btn'+s);
+      const spn = document.getElementById('spn'+s[0]);
+      const txt = document.getElementById('txt'+s[0]);
+      if (!btn) return;
+      btn.disabled = on;
+      spn.style.display = on ? 'block' : 'none';
+      txt.style.opacity = on ? '0.5' : '1';
+      txt.innerHTML = on ? 'Analyzing...' : '<i class="fa-solid fa-bolt"></i> &nbsp;Run Code Review';
+    });
+    document.getElementById('liveBadge').style.display = on ? 'flex' : 'none';
+  }
+
+  function toggleSec(id) {
+    document.getElementById('body-'+id)?.classList.toggle('open');
+    document.getElementById('chev-'+id)?.classList.toggle('open');
+  }
+
+  function skeletons() {
+    return '<div class="loading-wrap">' +
+      SECTIONS.map(s=>`
+        <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden">
+          <div style="padding:11px 15px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+            <div class="skeleton" style="width:27px;height:27px;border-radius:6px;flex-shrink:0"></div>
+            <div class="skeleton" style="height:11px;width:120px"></div>
+          </div>
+          <div style="padding:13px 15px">
+            <div class="skeleton" style="height:10px;width:100%;margin-bottom:7px"></div>
+            <div class="skeleton" style="height:10px;width:80%;margin-bottom:7px"></div>
+            <div class="skeleton" style="height:10px;width:60%"></div>
+          </div>
+        </div>`).join('') +
+    '</div>';
+  }
+
+  function parseReview(text) {
+    const map = {
+      'BUSINESS LOGIC':'business','BUGS':'bugs','CLEAN CODE':'clean',
+      'PERFORMANCE':'perf','SECURITY':'security','CONCURRENCY':'concur',
+      'PRODUCTION':'prod','ARCHITECTURE':'arch','TESTING':'testing',
+      'FINAL SCORE':'scores','FINAL VERDICT':'verdict',
+    };
+    const result = {};
+    let cur = null;
+    for (const line of text.split('\n')) {
+      const t = line.trim();
+      let matched = false;
+      for (const [kw, key] of Object.entries(map)) {
+        if (t.toUpperCase().includes(kw)) { cur=key; if(!result[cur]) result[cur]=''; matched=true; break; }
+      }
+      if (!matched && cur && t && !t.startsWith('#'))
+        result[cur] += (result[cur]?'\n':'') + t;
+    }
+    return result;
+  }
+
+  function renderResults(parsed) {
+    let html = '<div class="results-wrap">';
+    SECTIONS.forEach((s,i) => {
+      const content = parsed[s.key] || '';
+      if (!content) return;
+      let body = '';
+      if (s.key === 'scores') {
+        const map = {};
+        content.split('\n').forEach(l => {
+          const m = l.match(/(.+?)[\s:]+(\d+(?:\.\d+)?)\s*\/\s*10/i);
+          if (m) map[m[1].trim()] = parseFloat(m[2]);
+        });
+        body = '<div class="score-grid">';
+        for (const [lbl,val] of Object.entries(map)) {
+          const c = val>=8?'#4ade80':val>=6?'#fbbf24':'#f87171';
+          body += `<div class="score-item">
+            <div class="score-label">${lbl}</div>
+            <div class="score-bar-wrap">
+              <div class="score-bar"><div class="score-fill" style="width:${val*10}%;background:${c}"></div></div>
+              <div class="score-num" style="color:${c}">${val}/10</div>
+            </div></div>`;
+        }
+        body += '</div>';
+      } else if (s.key === 'verdict') {
+        const ok = /production.ready|ready for production/i.test(content);
+        const c = ok?'#4ade80':'#f87171', bg=ok?'rgba(74,222,128,.1)':'rgba(248,113,113,.1)';
+        body = `<div class="verdict-card">
+          <div class="verdict-status" style="background:${bg};color:${c}">
+            <i class="fa-solid ${ok?'fa-circle-check':'fa-triangle-exclamation'}" style="font-size:12px"></i>
+            ${ok?'Production Ready':'Needs Work'}
+          </div>
+          <div class="verdict-text">${content.replace(/\n/g,'<br>')}</div>
+        </div>`;
+      } else {
+        body = content.split('\n').filter(l=>l.trim()).map(l => {
+          const bullet = /^[-•*]/.test(l.trim());
+          const txt = l.replace(/^[-•*]\s*/,'');
+          return bullet
+            ? `<div class="issue-item" style="border-left-color:${s.color}">${txt}</div>`
+            : `<p style="margin-bottom:8px;font-family:var(--mono);font-size:13px;color:#c5c8db;line-height:1.75">${txt}</p>`;
+        }).join('');
+      }
+      html += `<div class="section-card" style="animation-delay:${i*.04}s">
+        <div class="sec-head" onclick="toggleSec('${s.key}')">
+          <div class="sec-icon" style="background:${s.bg}">
+            <i class="fa-solid ${s.icon}" style="color:${s.color};font-size:13px"></i>
+          </div>
+          <span class="sec-title">${s.label}</span>
+          <i class="fa-solid fa-chevron-down chevron open" id="chev-${s.key}"></i>
+        </div>
+        <div class="sec-body open" id="body-${s.key}">${body}</div>
+      </div>`;
+    });
+    html += '</div>';
+    document.getElementById('resultPanel').innerHTML = html;
+  }
+
+  async function startReview() {
+    const lang = document.getElementById('lang').value;
+    const reqs = document.getElementById('reqs').value;
+    const code = document.getElementById('code').value;
+
+    if (!lang || !code.trim()) {
+      const el = !lang ? document.getElementById('lang') : document.getElementById('code');
+      el.style.borderColor = '#f87171';
+      el.focus();
+      setTimeout(()=>el.style.borderColor='', 1500);
+      return;
+    }
+
+    setLoading(true);
+    if (window.innerWidth <= 720) {
+      switchTab('result');
+      document.getElementById('tabDot').style.display = 'block';
+    }
+    document.getElementById('resultPanel').innerHTML = skeletons();
+
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          language: lang,
+          businessRequirements: reqs || '',
+          code: code
+        })
+      });
+
+      // Handle HTTP errors from Spring Boot GlobalExceptionHandler
+      if (!res.ok) {
+        const err = await res.json().catch(()=>({message:'Unknown error'}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.errorMessage || 'Review failed');
+      }
+
+      renderResults(parseReview(data.review));
+
+    } catch(e) {
+      document.getElementById('resultPanel').innerHTML = `
+        <div class="error-banner">
+          <i class="fa-solid fa-triangle-exclamation" style="margin-top:2px;flex-shrink:0"></i>
+          <div><strong>Review failed</strong><br>${e.message}</div>
+        </div>
+        <div class="empty-state" style="min-height:180px">
+          <div class="empty-icon"><i class="fa-solid fa-rotate-right" style="color:#6c63ff;font-size:20px"></i></div>
+          <div class="empty-title">Try again</div>
+          <div>Check your connection or paste different code</div>
+        </div>`;
+    }
+
+    setLoading(false);
+  }
+</script>
+</body>
+</html>
